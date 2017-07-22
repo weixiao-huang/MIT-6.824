@@ -20,36 +20,50 @@ func doMap(
 	mapF func(file string, contents string) []KeyValue,
 ) {
 
+	// define intermediate file array, each element is a struct,
+	// which saves a file pointer and a json encoder pointer
 	var interFile []struct{
 		file *os.File
 		enc *json.Encoder
 	}
 	for i := 0; i < nReduce; i++ {
+		// Find the corresponding intermediate file name
 		fn := reduceName(jobName, mapTaskNumber, i)
+		// Create the file pointer
 		file, err := os.Create(fn)
 		if err != nil {
 			log.Println(err)
 			return
 		}
+		// Create the json encoder pointer
 		enc := json.NewEncoder(file)
+		// Append the file pointer and encoder pointer into array
 		interFile = append(interFile, struct {
 			file *os.File
 			enc  *json.Encoder
 		}{ file: file, enc: enc })
 	}
 
+	// Read contents from inFile
 	b, err := ioutil.ReadFile(inFile)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Get KeyValue from inFile by using mapF
 	res := mapF(inFile, string(b))
+	// Traverse the KeyValue
 	for _, kv := range res {
+		// Find the reduce number by using ihash and mod nReduce
 		r := int(math.Mod(float64(ihash(kv.Key)), float64(nReduce)))
+		// Encode the struct (KeyValue) into corresponding file
+		// using json encoder
 		err := interFile[r].enc.Encode(&kv)
 		if err != nil {
 			log.Println(err)
 		}
 	}
+	// Close files in interFile array
 	for i := range interFile {
 		interFile[i].file.Close()
 	}

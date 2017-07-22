@@ -17,25 +17,36 @@ func doReduce(
 	nMap int, // the number of map tasks that were run ("M" in the paper)
 	reduceF func(key string, values []string) string,
 ) {
+
+	// define intermediate file array, each element is a struct,
+	// which saves a file pointer and a json decoder pointer
 	var interFile []struct{
 		file *os.File
 		dec *json.Decoder
 	}
+
+	// define the result KeyValue map
 	var resultKv map[string][]string
 	resultKv = make(map[string][]string)
 
 	for i := 0; i < nMap; i++ {
+		// Get the intermediate file name according to the map index
 		fn := reduceName(jobName, i, reduceTaskNumber)
+		// Open file
 		file, err := os.Open(fn)
 		if err != nil {
 			log.Println(err)
 			return
 		}
+		// define the json decoder for getting the KeyValue data
 		dec := json.NewDecoder(file)
+		// Read file
 		for {
 			var kv KeyValue
+			// Read every KeyValue data into kv
 			err := dec.Decode(&kv)
 			if err != nil { break }
+			// Append the value sharing the same key
 			resultKv[kv.Key] = append(resultKv[kv.Key], kv.Value)
 		}
 		interFile = append(interFile, struct {
@@ -44,15 +55,19 @@ func doReduce(
 		}{ file: file, dec: dec })
 	}
 
+	// Create the output file
 	file, err := os.Create(outFile)
 	if err != nil {
 		log.Println(err)
 		return
 	}
+	// Create the json encoder for writing data into output file
 	enc := json.NewEncoder(file)
 	for key, values := range resultKv {
+		// For each key, use reduceF to get the final KeyValue
 		enc.Encode(KeyValue{key, reduceF(key, values)})
 	}
+	// Close the file
 	file.Close()
 
 	// You will need to write this function.
